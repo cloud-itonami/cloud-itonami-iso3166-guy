@@ -1,0 +1,13 @@
+;; Real-world organization location / contact.
+;; :head-role is institutional title only — no personal names.
+{:ooyake-id "gov.guy"
+  :official-url "https://www.op.gov.gy/"
+  :name-en "Guyana"
+  :name-local "Guyana"
+  :wikidata "Q734"
+  :head-role "NPTA / public procurement"
+  :head-role-note "institutional office title only; personal names of current office-holders are intentionally NOT stored"
+  :contact-page "https://www.wikidata.org/wiki/Q10717"
+  :sourced-from "com-etzhayyim-ooyake gov-units (verbatim where present)"
+  :hq {:line-en "Georgetown" :country "guy" :kind "capital" :provenance "https://www.wikidata.org/wiki/Q10717" :last-verified "2026-07-10" :sourcing "authoritative"}
+}
