@@ -1,0 +1,13 @@
+;; data/culture-tx.edn — DataScript tx-data derived from src/culture/facts.cljc
+;; `culture.facts/catalog` (ADR-2607171400 addendum 2, Wave 1 country-level).
+;; Same shape across every cloud-itonami-iso3166-* sibling. Do not hand-edit;
+;; regenerate from the catalog.
+
+[
+#:culture{:id "guy.dish.pepperpot", :name "Guyanese pepperpot", :country "GUY", :kind :dish, :summary "Slow-cooked meat stew, one of Guyana's national dishes, traditionally served at Christmas and made with meat, cinnamon, hot peppers and cassareep.", :url "https://en.wikipedia.org/wiki/Guyanese_pepperpot", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+#:culture{:id "guy.dish.cook-up-rice", :name "Cook-up rice", :country "GUY", :kind :dish, :summary "One-pot meal, the local variation on Anglo-Caribbean rice and peas, among the most frequently prepared dishes in Guyana.", :url "https://en.wikipedia.org/wiki/Culture_of_Guyana", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+#:culture{:id "guy.dish.metemgee", :name "Metemgee", :country "GUY", :kind :dish, :summary "Thick, rich Guyanese soup with ground provisions, coconut milk and large dumplings called duff, typically eaten with fried fish or chicken.", :url "https://en.wikipedia.org/wiki/Culture_of_Guyana", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+#:culture{:id "guy.dish.curry", :name "Guyanese curry", :country "GUY", :kind :dish, :summary "Curry is widely popular in Guyana, reflecting Indian influences, with variations including chicken, seafood, goat, lamb and duck.", :url "https://en.wikipedia.org/wiki/Culture_of_Guyana", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+#:culture{:id "guy.product.demerara-sugar", :name "Demerara sugar", :country "GUY", :kind :product, :summary "Demerara sugar is so named because it originally came from sugarcane fields in the colony of Demerara, a historical region in present-day Guyana.", :url "https://en.wikipedia.org/wiki/Demerara", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+#:culture{:id "guy.festival.mashramani", :name "Mashramani", :country "GUY", :kind :festival, :summary "Annual festival held on 23 February, Guyana's Republic Day, celebrating the nation's transition to a republic in 1970 with parades, music competitions and costume contests.", :url "https://en.wikipedia.org/wiki/Mashramani", :url-provenance :wikipedia-en, :retrieved-at "2026-07-17"}
+]
