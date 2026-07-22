@@ -14,54 +14,32 @@
   claimed monetary total against the entity's own recorded quantity x
   unit fields), reapplied to a market-entry engagement fee line.
 
-  `days-until-eligible-bid` / `bidder-registration-lead-time-insufficient?`
-  are THIS vertical's own new ground-truth check, grounding GUY's
-  flagship governor check
-  (`marketentry.governor/registration-lead-time-insufficient-violations`):
-  the Procurement (Amendment) Act 2019 s.4A(2) (own primary text, OCR'd
-  directly from the Official Gazette PDF -- see `marketentry.facts`),
-  independently corroborated by the Procurement (Register of Bidders)
-  Regulations 2022 reg.5(2) (same primary-source discipline, a SECOND
-  document), fixes a MINIMUM lead time: a supplier or contractor must
-  submit an Application for Registration and become a Registered Bidder
-  AT LEAST SEVEN DAYS before submitting a bid.
+  `business-registration-missing?` grounds this jurisdiction's flagship
+  governor check: the Companies Act 1991 requires a NON-RESIDENT
+  company to register with the Registrar of Companies (via the Deeds
+  and Commercial Registries Authority, DCRA) only when it is 'carrying
+  on an undertaking' in Guyana -- a five-way trigger set (maintaining
+  an office; maintaining a share transfer/registration office; entering
+  two or more contracts with local parties for work performed in
+  Guyana; appointing a resident agent; or owning/using
+  profit-generating assets in Guyana). A RESIDENT Guyanese entity has no
+  such conditionality -- registration is always required. This is a
+  genuinely CONDITIONAL check (like every sibling's own conditional
+  slot) rather than a blanket 'always register' rule, source: Grant
+  Thornton Guyana, 'Guyanese registration requirements for non-resident
+  companies'.
 
-  This is a DIFFERENT check SHAPE from every prior sibling this repo
-  mirrors: not a dual authority-escalation ladder over a procuring
-  entity's own governance hierarchy (Dominica), not a backward-looking
-  director/officer conviction-disqualification lookback (Grenada), not
-  a closed-set validity test on a filing's own execution instrument
-  (Estonia) -- and, MOST IMPORTANTLY, it is the temporal MIRROR IMAGE of
-  Barbados's own flagship: BRB's `supplier-registration-expired?`
-  recomputes a MAXIMUM validity window (registration must not be too
-  OLD -- a stale/lapsed credential is the failure mode); GUY's
-  `bidder-registration-lead-time-insufficient?` recomputes a MINIMUM
-  lead time (registration must not be too RECENT -- a rushed,
-  last-minute registration used to dodge the Administration's own
-  seven-day review/publication window is the failure mode). Same
-  general surface (date arithmetic against a declared registration
-  date) but the opposite comparison direction and a genuinely different
-  regulatory concern, grounded in Guyana's own two independent primary
-  sources rather than copied from BRB's shape.
-
-  Dates are plain ISO-8601 \"YYYY-MM-DD\" strings -- deliberately no
-  external date/calendar library and no host date API (`java.time` /
-  `js/Date`), so the recompute is byte-identical on every `.cljc`
-  target, the same discipline BRB's `compute-registration-expiry` uses.
-  BRB bumps only the 4-digit year prefix (sufficient for a whole-year
-  validity window); GUY's window is measured in DAYS, so this namespace
-  instead converts each ISO date to a day-count via Howard Hinnant's
-  `days_from_civil` algorithm (http://howardhinnant.github.io/date_algorithms.html)
-  -- pure integer arithmetic over the proleptic Gregorian calendar, no
-  external library, correct across month/year boundaries and leap
-  years, and independently cross-checked against Python's `datetime`
-  for several dates (1970-01-01, 2000-02-29 and 2024-02-29 (leap days),
-  2019-06-12, 2021-12-31, 2026-07-21) while writing this namespace.
+  `local-content-act-applies?` / `local-content-noncompliant?` ground
+  the SECTOR-CONDITIONAL Local Content Act 2021 check: this Act applies
+  ONLY to persons engaged in petroleum operations/related activities
+  under a license issued under the Petroleum Activities Act -- it must
+  NEVER fire for a non-petroleum-sector engagement (see
+  `marketentry.facts` catalog docstring).
 
   This namespace is pure data + pure functions -- no I/O, no network
   call to any real National Procurement and Tender Administration
-  system. It builds the RECORD an operator would keep, not the act of
-  submitting a portal registration itself (that is
+  system, no host date API. It builds the RECORD an operator would
+  keep, not the act of submitting a portal registration itself (that is
   `marketentry.operation`'s `:filing/submit`, always human-gated -- see
   README Actuation)."
   (:require [clojure.string :as str]))
@@ -95,69 +73,78 @@
   [{:keys [claimed-fee] :as engagement}]
   (== (double claimed-fee) (compute-engagement-fee engagement)))
 
-;; ----------------------- pure ISO-8601 day-count arithmetic -----------------------
+;; --------------- Companies Act 1991 non-resident registration gate ---------------
 
-(defn- parse-int [s]
-  #?(:clj (Integer/parseInt s)
-     :cljs (js/parseInt s 10)))
+(def non-resident-undertaking-triggers
+  "Companies Act 1991 'carrying on an undertaking' triggers for a
+  NON-RESIDENT company -- tripping ANY ONE of these means the company
+  must register with the Registrar of Companies (via DCRA) before
+  continuing to operate in Guyana. Source: Grant Thornton Guyana,
+  'Guyanese registration requirements for non-resident companies'."
+  #{:maintains-office?
+    :maintains-share-transfer-office?
+    :two-or-more-local-contracts?
+    :appointed-resident-agent?
+    :owns-or-uses-profit-generating-assets?})
 
-(defn days-from-civil
-  "Howard Hinnant's `days_from_civil` algorithm: converts a proleptic
-  Gregorian calendar date (`y` `m` `d`, 1-indexed month/day) to an
-  integer day count relative to 1970-01-01 (the Unix epoch). Pure
-  integer arithmetic only -- no external date/calendar library, no
-  host date API. Valid for `y` >= 0 (every real engagement date in this
-  catalog is 20xx)."
-  [y m d]
-  (let [y'  (if (<= m 2) (dec y) y)
-        era (quot y' 400)
-        yoe (- y' (* era 400))
-        doy (+ (quot (+ (* 153 (+ m (if (> m 2) -3 9))) 2) 5) (dec d))
-        doe (+ (* yoe 365) (quot yoe 4) (- (quot yoe 100)) doy)]
-    (+ (* era 146097) doe -719468)))
-
-(defn parse-iso-date
-  "\"YYYY-MM-DD\" -> integer day count since 1970-01-01, or nil for a
-  blank/missing date. Does not validate calendar correctness beyond
-  what `days-from-civil` computes (garbage-in/garbage-out is treated as
-  the caller's problem, matching this family's minimal-recompute
-  discipline)."
-  [s]
-  (when (and s (>= (count s) 10))
-    (days-from-civil (parse-int (subs s 0 4))
-                      (parse-int (subs s 5 7))
-                      (parse-int (subs s 8 10)))))
-
-(def registration-lead-time-days
-  "Procurement (Amendment) Act 2019 s.4A(2) (inserted into the
-  Procurement Act, Cap. 73:05) + Procurement (Register of Bidders)
-  Regulations 2022 (Regulations No. 23 of 2022) reg.5(2): a supplier or
-  contractor must be a Registered Bidder AT LEAST SEVEN DAYS before
-  submitting a bid."
-  7)
-
-(defn earliest-eligible-bid-day
-  "The ground-truth earliest day-count on which `bidder-registration-
-  date` (\"YYYY-MM-DD\") is eligible to submit a bid -- registration
-  day-count + `registration-lead-time-days`. nil if `bidder-
-  registration-date` is missing/blank."
-  [bidder-registration-date]
-  (when-let [reg-day (parse-iso-date bidder-registration-date)]
-    (+ reg-day registration-lead-time-days)))
-
-(defn bidder-registration-lead-time-insufficient?
-  "Does `engagement`'s own declared `:submission-date` fall STRICTLY
-  BEFORE its own declared `:bidder-registration-date` +
-  `registration-lead-time-days` -- i.e. was the bid submitted before
-  the mandatory seven-day Register of Bidders lead time had elapsed?
-  Missing either date is never treated as insufficient here (that is
-  the `evidence-incomplete` check's job, upstream in the phase where an
-  assessment must already exist)."
-  [{:keys [bidder-registration-date submission-date]}]
+(defn non-resident-registration-required?
+  "Does `engagement` (a NON-RESIDENT operator, `:resident?` false/nil)
+  trip ANY Companies Act 1991 'carrying on an undertaking' trigger
+  (present as a truthy key in `:undertaking-triggers`)? A RESIDENT
+  Guyanese entity is out of scope for this specific gate -- see
+  `business-registration-missing?`."
+  [{:keys [resident? undertaking-triggers]}]
   (boolean
-   (when-let [earliest (earliest-eligible-bid-day bidder-registration-date)]
-     (when-let [submission-day (parse-iso-date submission-date)]
-       (< submission-day earliest)))))
+   (and (not (true? resident?))
+        (some (fn [trigger] (contains? undertaking-triggers trigger))
+              non-resident-undertaking-triggers))))
+
+(defn business-registration-missing?
+  "TRUE when `engagement` is required to be registered with the
+  Registrar of Companies (via DCRA) -- either because it is a RESIDENT
+  Guyanese entity (registration is always required) or because it is a
+  NON-RESIDENT entity that trips a Companies Act 1991 'carrying on an
+  undertaking' trigger (`non-resident-registration-required?`) -- but
+  `:business-registration-verified?` is not true. A NON-RESIDENT
+  engagement that trips NO trigger is honestly NOT required to
+  register yet, and this fn returns false for it even when
+  `:business-registration-verified?` is false/missing."
+  [{:keys [resident? business-registration-verified?] :as engagement}]
+  (boolean
+   (and (or (true? resident?)
+            (non-resident-registration-required? engagement))
+        (not (true? business-registration-verified?)))))
+
+;; --------------- Local Content Act 2021 (sector-gated) ---------------
+
+(def local-content-sectors
+  "Sectors the Local Content Act 2021 applies to -- ONLY persons engaged
+  in petroleum operations/related activities under a license issued
+  under the Petroleum Activities Act. Every other sector is OUT OF
+  SCOPE for this Act -- see `marketentry.facts` catalog docstring."
+  #{:petroleum})
+
+(defn local-content-act-applies?
+  "Does the Local Content Act 2021 apply to `engagement`'s own
+  `:sector`? SECTOR-CONDITIONAL: true ONLY for petroleum-sector
+  engagements, false for every other sector (including a missing/nil
+  `:sector`) -- never fabricate a wider applicability."
+  [{:keys [sector]}]
+  (boolean (local-content-sectors sector)))
+
+(defn local-content-noncompliant?
+  "TRUE only when the Local Content Act 2021 actually applies to
+  `engagement` (`local-content-act-applies?`) AND
+  `:local-content-compliant?` is not true. For a non-petroleum-sector
+  engagement this ALWAYS returns false, regardless of
+  `:local-content-compliant?` -- the sector conditionality itself is
+  the fact under test here."
+  [{:keys [local-content-compliant?] :as engagement}]
+  (boolean
+   (and (local-content-act-applies? engagement)
+        (not (true? local-content-compliant?)))))
+
+;; ----------------------------- filing records -----------------------------
 
 (defn register-draft
   "Validate + construct the FILING-DRAFT registration DRAFT -- the

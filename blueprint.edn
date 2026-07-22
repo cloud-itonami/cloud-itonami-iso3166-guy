@@ -6,4 +6,42 @@
  :itonami.blueprint/governor :market-entry-compliance-governor
  :itonami.blueprint/robotics false
  :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
- :itonami.blueprint/status :public-oss}
+ :itonami.blueprint/status :public-oss
+ :itonami.blueprint/maturity :implemented
+ :itonami.blueprint/implemented-slice
+ "src/marketentry/* (langgraph-clj StateGraph actor, compiled via
+ `operation/build` -> `g/state-graph` -> `g/compile-graph` with
+ `interrupt-before #{:request-approval}`): facts.cljc (official
+ spec-basis catalog -- NPTA/Procurement Act 2003, DCRA/Companies Act
+ 1991 non-resident 'carrying on an undertaking' triggers, GRA TIN,
+ Public Procurement Commission/Article 212W, Local Content Act 2021
+ sector-gated to petroleum only -- verified-facts-only, zero
+ fabrication, see docs/adr/0001-architecture.md 'Correction' section),
+ governor.cljc (Market-Entry Compliance Governor -- spec-basis HARD
+ check, evidence-incomplete HARD check, `:business-registration-
+ missing` HARD check independently recomputing DCRA registration
+ requirement (unconditional for resident entities, CONDITIONAL on the
+ Companies Act 1991 trigger set for non-resident entities) -- the
+ flagship new check for this vertical --, engagement-fee-mismatch
+ independent recompute, `:tin-unverified` HARD check (GRA TIN,
+ unconditional), `:local-content-noncompliant` HARD check
+ (SECTOR-CONDITIONAL, fires only for `:sector :petroleum`,
+ confidence-floor/actuation gate, plus double-draft/double-submit
+ guards), store.cljc (MemStore + DatomicStore via
+ `io.github.kotoba-lang/langchain-store`
+ (`ls/enc`/`ls/dec*`/`ls/read-stream`/`ls/append-blob!`) instead of a
+ hand-rolled EDN-blob codec), registry.cljc (pure-function
+ filing-draft/filing-submit record construction + fee recompute +
+ business-registration-missing?/local-content-noncompliant? pure
+ predicates), marketentryllm.cljc (mock MarketEntry Advisor),
+ operation.cljc (intake -> advise -> govern -> decide ->
+ [request-approval ->] commit/hold StateGraph, `store/append-ledger!`
+ called from both the `:commit` and `:hold` nodes), phase.cljc (0->3
+ rollout, `:filing/draft`/`:filing/submit` permanently excluded from
+ every phase's `:auto` set). Tests cover: governor contract (including
+ both directions of the two conditional checks' conditionality --
+ business-registration-missing fires when a non-resident trigger is
+ tripped and NOT when none is, local-content-noncompliant fires for
+ petroleum sector and NEVER for any other sector), store parity, facts,
+ phase, registry -- plus this repo's separate `culture`/`statute`
+ domain namespaces, left untouched. clj-kondo clean."}

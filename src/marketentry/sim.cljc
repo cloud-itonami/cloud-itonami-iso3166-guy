@@ -49,12 +49,12 @@
     (println "== filing/submit eng-3 (fee mismatch -> HARD hold) ==")
     (println (exec-op actor "t7" {:op :filing/submit :subject "eng-3"} operator))
 
-    (println "== jurisdiction/assess eng-4 (sets up registration-lead-time-insufficient) ==")
+    (println "== jurisdiction/assess eng-4 (sets up business-registration-missing) ==")
     (println (exec-op actor "t8" {:op :jurisdiction/assess :subject "eng-4"} operator))
     (println (approve! actor "t8"))
     (println (exec-op actor "t8b" {:op :filing/draft :subject "eng-4"} operator))
     (println (approve! actor "t8b"))
-    (println "== filing/submit eng-4 (registered only 3 days before submission, needs 7 -> HARD hold) ==")
+    (println "== filing/submit eng-4 (non-resident, tripped a Companies Act 1991 trigger, unregistered -> HARD hold) ==")
     (println (exec-op actor "t9" {:op :filing/submit :subject "eng-4"} operator))
 
     (println "== jurisdiction/assess eng-5 (sets up tin-unverified) ==")
@@ -65,11 +65,41 @@
     (println "== filing/submit eng-5 (tin-unverified -> HARD hold) ==")
     (println (exec-op actor "t11" {:op :filing/submit :subject "eng-5"} operator))
 
+    (println "== jurisdiction/assess eng-6 (sets up local-content-noncompliant, petroleum sector) ==")
+    (println (exec-op actor "t12" {:op :jurisdiction/assess :subject "eng-6"} operator))
+    (println (approve! actor "t12"))
+    (println (exec-op actor "t12b" {:op :filing/draft :subject "eng-6"} operator))
+    (println (approve! actor "t12b"))
+    (println "== filing/submit eng-6 (petroleum sector, Local Content Act non-compliant -> HARD hold) ==")
+    (println (exec-op actor "t13" {:op :filing/submit :subject "eng-6"} operator))
+
+    (println "== jurisdiction/assess eng-7 (general sector, same 'noncompliant' flag as eng-6, but Local Content Act does NOT apply outside petroleum) ==")
+    (println (exec-op actor "t14" {:op :jurisdiction/assess :subject "eng-7"} operator))
+    (println (approve! actor "t14"))
+    (println (exec-op actor "t14b" {:op :filing/draft :subject "eng-7"} operator))
+    (println (approve! actor "t14b"))
+    (println "== filing/submit eng-7 (general sector -> only the normal actuation escalation, NOT a Local Content Act hold) ==")
+    (let [r (exec-op actor "t15" {:op :filing/submit :subject "eng-7"} operator)]
+      (println r)
+      (println "-- human market-entry operator approves --")
+      (println (approve! actor "t15")))
+
+    (println "== jurisdiction/assess eng-8 (non-resident, trips NO Companies Act 1991 trigger -> registration not yet required) ==")
+    (println (exec-op actor "t16" {:op :jurisdiction/assess :subject "eng-8"} operator))
+    (println (approve! actor "t16"))
+    (println (exec-op actor "t16b" {:op :filing/draft :subject "eng-8"} operator))
+    (println (approve! actor "t16b"))
+    (println "== filing/submit eng-8 (non-resident, no trigger tripped -> only the normal actuation escalation, NOT a business-registration-missing hold) ==")
+    (let [r (exec-op actor "t17" {:op :filing/submit :subject "eng-8"} operator)]
+      (println r)
+      (println "-- human market-entry operator approves --")
+      (println (approve! actor "t17")))
+
     (println "== filing/draft eng-1 AGAIN (double-draft -> HARD hold) ==")
-    (println (exec-op actor "t12" {:op :filing/draft :subject "eng-1"} operator))
+    (println (exec-op actor "t18" {:op :filing/draft :subject "eng-1"} operator))
 
     (println "== filing/submit eng-1 AGAIN (double-submit -> HARD hold) ==")
-    (println (exec-op actor "t13" {:op :filing/submit :subject "eng-1"} operator))
+    (println (exec-op actor "t19" {:op :filing/submit :subject "eng-1"} operator))
 
     (println "== audit ledger ==")
     (doseq [f (store/ledger db)] (println f))

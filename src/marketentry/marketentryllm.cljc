@@ -82,10 +82,11 @@
     {:summary    (str subject " 向けポータル提出提案"
                       (when e (str " (operator=" (:operator e) ")")))
      :rationale  (if e
-                   (str "bidder-registration-date=" (:bidder-registration-date e)
-                        " submission-date=" (:submission-date e)
-                        " requires-tin?=" (:requires-tin? e)
+                   (str "resident?=" (:resident? e)
+                        " business-registration-verified?=" (:business-registration-verified? e)
                         " tin-verified?=" (:tin-verified? e)
+                        " sector=" (:sector e)
+                        " local-content-compliant?=" (:local-content-compliant? e)
                         " claimed-fee=" (:claimed-fee e))
                    "engagementが見つかりません")
      :cites      (if e [subject] [])
@@ -93,9 +94,10 @@
      :value      {:engagement-id subject}
      :stake      :actuation/submit-filing
      :confidence (if (and e
-                          (not (registry/bidder-registration-lead-time-insufficient? e))
-                          (or (not (:requires-tin? e))
-                              (:tin-verified? e)))
+                          (not (registry/business-registration-missing? e))
+                          (:tin-verified? e)
+                          (not (registry/local-content-noncompliant? e))
+                          (registry/engagement-fee-matches-claim? e))
                    0.9 0.3)}))
 
 (defprotocol Advisor

@@ -17,25 +17,31 @@
   Guyana for the first time
 - a `cloud-itonami-M6910` client that has just completed incorporation
   and now needs public-sector market access
+- a petroleum-sector operator (Local Content Act 2021 applies)
 
 ## Offer
 
 - registration/submission walkthrough for public procurement under the
-  Procurement Act 2003 (Cap. 73:05), including the mandatory Register
-  of Bidders lead time (Procurement (Amendment) Act 2019 s.4A(2) +
-  Procurement (Register of Bidders) Regulations 2022 reg.5(2)): a
-  supplier or contractor must become a Registered Bidder AT LEAST SEVEN
-  DAYS before submitting a bid
-- business/tax registration checklist: Certificate of Incorporation
-  from the Registrar of Companies (Companies Act Cap. 89:01), plus a
-  SEPARATE Taxpayer Identification Number (TIN) application to the
-  Guyana Revenue Authority (GRA) -- the Commercial Registry Business
-  Registration Certificate is itself a prerequisite supporting document
-  for the TIN application
-- registration-lead-time-sufficiency screening: independent
-  verification that an engagement's own declared bidder-registration
-  date actually clears the mandatory seven-day lead time before its own
-  declared bid-submission date, before any filing submission
+  Procurement Act 2003 (Act No. 8 of 2003), administered by the
+  National Procurement and Tender Administration (NPTA, established
+  under s.16(1)) -- including Register of Bidders awareness
+  (Regulations No. 23 of 2022)
+- business/tax registration checklist: a business registration record
+  from the Deeds and Commercial Registries Authority (DCRA, Deeds and
+  Commercial Registries Authority Act No. 4 of 2013), plus a SEPARATE
+  Taxpayer Identification Number (TIN) application to the Guyana
+  Revenue Authority (GRA)
+- non-resident registration screening: independent verification of
+  whether a foreign/non-resident engagement has actually tripped a
+  Companies Act 1991 "carrying on an undertaking" trigger (maintaining
+  an office; maintaining a share transfer/registration office; entering
+  two or more local contracts for Guyana-performed work; appointing a
+  resident agent; or owning/using profit-generating assets in Guyana)
+  before requiring DCRA registration -- and holding when it has
+  tripped one but is not yet registered
+- petroleum-sector Local Content Act 2021 screening: SECTOR-CONDITIONAL
+  -- only evaluated for engagements whose own sector is petroleum, never
+  applied to a non-oil-and-gas engagement
 - ongoing regulatory-change monitoring subscription
 - compliance-audit export package for the client's own records
 
@@ -54,11 +60,18 @@
 - a false or fabricated regulatory-requirement claim is a HARD hold that
   cannot be overridden by human approval alone -- it must be corrected
   against a cited official source first
-- a bidder-registration date that falls short of the mandatory
-  seven-day Register of Bidders lead time (Procurement (Amendment) Act
-  2019 s.4A(2) / Procurement (Register of Bidders) Regulations 2022
-  reg.5(2)) is a HARD hold on `:filing/submit`, independently
-  recomputed rather than trusted from a self-reported registration date
+- a non-resident engagement that has tripped a Companies Act 1991
+  "carrying on an undertaking" trigger but has no verified DCRA
+  business registration is a HARD hold on `:filing/submit`,
+  independently recomputed rather than trusted from a self-reported
+  flag
+- an unverified GRA Taxpayer Identification Number (TIN) is a HARD hold
+  on `:filing/submit` -- unconditional, since every engagement this
+  service exists for is, by definition, conducting business with a
+  government body
+- a petroleum-sector engagement that is not Local Content Act 2021
+  compliant is a HARD hold on `:filing/submit` -- this check is
+  SECTOR-CONDITIONAL and never applied to a non-petroleum engagement
 - this service does **not** provide legal or tax advice; characterization
   and filing on the client's behalf beyond checklist/draft assistance
   routes to Guyana-licensed counsel or a registered agent
