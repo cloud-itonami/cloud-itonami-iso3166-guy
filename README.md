@@ -14,42 +14,52 @@ regulatory-compliance rules in Guyana, so the operator can win and
 service a government contract without hiring a full in-house
 compliance department.
 
-## Official surface (curl/OCR-verified 2026-07-22)
+## Regulatory catalog (verified facts only)
 
-- Procurement: the National Procurement and Tender Administration
-  (NPTA, `www.npta.gov.gy` -- note `nptab.gov.gy` does NOT resolve in
-  DNS), an agency established under the Minister of Finance and managed
-  by its 7-member National Board, established/governed by the
-  Procurement Act 2003 (Cap. 73:05) s.16. Popularly branded together as
-  the National Procurement and Tender Administration Board (NPTAB, per
-  the site's own footer copyright line).
-- Register of Bidders: every supplier/contractor must submit an
-  Application for Registration and become a Registered Bidder AT LEAST
-  SEVEN DAYS before submitting a bid (Procurement (Amendment) Act 2019
-  s.4A(2), independently corroborated by the Procurement (Register of
-  Bidders) Regulations 2022 reg.5(2)).
-- Business registration: the Registrar of Companies administers the
-  Companies Act (Cap. 89:01) -- s.4 incorporation, s.8 certificate of
-  incorporation (conclusive proof, company exists from the date shown
-  on it). Which Ministry supervises the Registrar could not be
-  independently confirmed this iteration (the apparent registrar
-  subdomain, `dcra.gov.gy` -> `dcraguyana.org`, is behind a Cloudflare
-  bot challenge this iteration did not attempt to bypass) -- an honest
-  gap, not a guess.
-- Tax: the Guyana Revenue Authority (GRA, `gra.gov.gy`) issues a
-  Taxpayer Identification Number (TIN) via a SEPARATE application from
-  business registration -- GRA's own TIN guidance requires the
-  Commercial Registry Business Registration Certificate as a
-  prerequisite supporting document for a Trade/Business TIN
-  application, a two-act model (like ATG/GRD/BRB, unlike DMA's
-  automatic same-transaction model).
-- Local Content Act 2021 (Act No. 18 of 2021): genuinely investigated
-  given Guyana's oil-and-gas boom, and cited in `src/statute/facts.cljc`
-  as a real, currently topical general-compliance statute -- but
-  deliberately NOT the flagship governor check here (see
-  `docs/adr/0001-architecture.md` for why its two candidate mechanics
-  were each set aside as too close to an already-used sibling
-  mechanic).
+Every fact in `src/marketentry/facts.cljc` traces to one of the
+official/primary sources below. See that namespace's docstring for the
+full source list and the "explicitly NOT claimed" fabrication traps
+this repository deliberately avoids (a previous draft of this
+repository did NOT avoid all of them -- see `docs/adr/0001-
+architecture.md` "Correction" section for what was found and fixed).
+
+- **Business/company registration**: the Deeds and Commercial
+  Registries Authority (DCRA), established by the Deeds and Commercial
+  Registries Authority Act No. 4 of 2013, administers the Companies
+  Act, the Business Names (Registration) Act, and the Partnership Act.
+  A NON-RESIDENT company must register under the Companies Act 1991
+  when "carrying on an undertaking" in Guyana -- triggered by ANY of:
+  maintaining an office; maintaining a share transfer/registration
+  office; entering two or more contracts with local parties for work
+  performed in Guyana; appointing a resident agent; or owning/using
+  profit-generating assets in Guyana. No online registration platform
+  -- physical registration with the Registrar of Companies is required.
+- **Public procurement**: the Procurement Act 2003 (Act No. 8 of
+  2003), amended by the Procurement (Amendment) Act 2010 and the
+  Procurement (Amendment) Act 2019. Regulations include the
+  Procurement Regulations 2004, the Procurement Amendment Regulations
+  2016, the Procurement Suspension and Debarment Regulations 2019, and
+  Regulations No. 23 of 2022 (Register of Bidders). The administering
+  body's CURRENT official self-branding is "National Procurement and
+  Tender Administration (NPTA)" -- WITHOUT "Board" ("NPTAB" is an
+  older/secondary-source name and is deliberately not used here) --
+  established under Section 16(1) of the Procurement Act 2003. A new
+  centralized e-procurement portal launched February 2026 at
+  eprocure.gov.gy.
+- **Public Procurement Commission (PPC)**: constitutional basis is
+  Article 212W of the Constitution of Guyana; first Commissioners were
+  sworn in 28 October 2016.
+- **Tax registration**: the Guyana Revenue Authority (GRA) is the sole
+  authority issuing Taxpayer Identification Numbers (TIN) -- required
+  for anyone conducting business with a Government Department, Public
+  Authority, Public Corporation, or the Bank of Guyana.
+- **Local content**: the Local Content Act 2021 applies ONLY to
+  persons engaged in petroleum operations/related activities under a
+  license issued under the Petroleum Activities Act -- requires >=51%
+  voting rights, >=75% executive/senior-management positions, and
+  >=90% non-managerial staff held by Guyanese nationals, plus ~40
+  reserved service categories. This is SECTOR-SPECIFIC (oil & gas
+  only): outside oil & gas, there is no national-ownership requirement.
 
 ## Implementation (R0)
 
@@ -58,7 +68,8 @@ compliance department.
 | Actor namespaces | `src/marketentry/*` |
 | Governor | `:market-entry-compliance-governor` |
 | Ops | `:engagement/intake` · `:jurisdiction/assess` · `:filing/draft` · `:filing/submit` |
-| Flagship HARD check | `registration-lead-time-insufficient` (Register of Bidders MINIMUM seven-day lead time before bidding, Procurement (Amendment) Act 2019 s.4A(2) + Procurement (Register of Bidders) Regulations 2022 reg.5(2) -- see `docs/adr/0001-architecture.md`) |
+| Flagship HARD check | `business-registration-missing` (DCRA/Companies Act 1991 registration, CONDITIONAL on the non-resident "carrying on an undertaking" trigger set for a non-resident operator, unconditional for a resident one -- see `docs/adr/0001-architecture.md`) |
+| Other checks | `evidence-incomplete` · `engagement-fee-mismatch` · `tin-unverified` (GRA TIN, unconditional) · `local-content-noncompliant` (Local Content Act 2021, SECTOR-CONDITIONAL, fires only for `:sector :petroleum`) |
 | Compliance catalog | `src/statute/facts.cljc` -- Companies Act (Cap. 89:01), Labour Act (Cap. 98:01), Termination of Employment and Severance Pay Act (Cap. 96:01), Local Content Act 2021 |
 | Tests | `clojure -M:dev:test` |
 | Demo | `clojure -M:dev:run` |
@@ -66,6 +77,36 @@ compliance department.
 
 `:filing/submit` is never in any phase's `:auto` set -- human sign-off
 is structural, not a rollout milestone.
+
+## Actuation: `filing/draft` and `filing/submit` are always human-gated
+
+`marketentry.registry/register-draft` and `register-submit` build an
+**unsigned, non-authoritative record** of what a market-entry operator
+*intends* to file -- neither function, nor anything in this actor,
+ever calls a real NPTA/DCRA/GRA system. Whether that record is ever
+turned into a real portal submission is entirely the human market-entry
+operator's decision, enforced by two independent layers that must BOTH
+agree before a real-world act happens:
+
+1. **`marketentry.governor/high-stakes`** marks
+   `:actuation/draft-filing` and `:actuation/submit-filing` as
+   high-stakes -- any proposal carrying either `:stake` value always
+   `:escalate?`s, regardless of confidence or how clean the governor's
+   other checks are.
+2. **`marketentry.phase/phases`** never puts `:filing/draft` or
+   `:filing/submit` in any phase's `:auto` set (see the explicit
+   comment in `phase.cljc`: "a permanent structural fact, not a rollout
+   milestone still to come").
+
+Concretely, in `marketentry.operation/build`'s StateGraph,
+`interrupt-before #{:request-approval}` means the graph run itself
+*pauses* (checkpointed, resumable) the moment a `:filing/draft` or
+`:filing/submit` proposal reaches that node -- there is no code path
+that reaches `:commit` for either op without a human explicitly
+resuming the run with `{:approval {:status :approved :by "<human>"}}`.
+`test/marketentry/governor_contract_test.clj`'s
+`filing-draft-and-submit-never-auto-commit` test asserts this
+end-to-end, at phase 3 (the most permissive phase).
 
 ## No robotics premise -- digital/data service exemption
 
@@ -105,10 +146,11 @@ phase's `:auto` set -- it always requires human sign-off.
   a registered agent where the law requires licensed representation.
 - **Not a Local Content Act compliance system.** This blueprint models
   general public-procurement market entry (business/tax registration +
-  Register of Bidders), not the Local Content Act 2021's own
-  petroleum-sector-specific Local Content Master Plan / Annual Plan /
-  Secretariat-certification regime -- a distinct, larger regulatory
-  domain out of scope here. See `docs/adr/0001-architecture.md`.
+  Register of Bidders awareness) plus a SECTOR-CONDITIONAL Local
+  Content Act 2021 governor check for petroleum-sector engagements --
+  not the Act's own Local Content Master Plan / Annual Plan /
+  Secretariat-certification regime, a distinct, larger regulatory
+  domain out of scope here.
 
 ## Capability layer
 

@@ -68,15 +68,15 @@
       (is (= :hold (get-in res [:state :disposition])))
       (is (some #{:evidence-incomplete} (-> (store/ledger db) first :basis))))))
 
-(deftest registration-lead-time-insufficient-is-held-and-unoverridable
-  (testing "registered only 3 days before submission (needs at least 7) -> HARD hold (flagship check)"
+(deftest business-registration-missing-is-held-and-unoverridable
+  (testing "non-resident engagement that tripped a Companies Act 1991 trigger but is not registered -> HARD hold (flagship check)"
     (let [[db actor] (fresh)
           _ (assess! actor "t5pre" "eng-4")
           _ (draft! actor "t5pre" "eng-4")
           res (exec-op actor "t5" {:op :filing/submit :subject "eng-4"} operator)]
       (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt")
       (is (not= :interrupted (:status res)))
-      (is (some #{:registration-lead-time-insufficient} (-> (store/ledger db) last :basis)))
+      (is (some #{:business-registration-missing} (-> (store/ledger db) last :basis)))
       (is (empty? (store/submit-history db))))))
 
 (deftest engagement-fee-mismatch-is-held
@@ -90,7 +90,7 @@
       (is (empty? (store/submit-history db))))))
 
 (deftest tin-unverified-is-held-and-unoverridable
-  (testing "unverified GRA Taxpayer Identification Number (TIN) when required -> HARD hold"
+  (testing "unverified GRA Taxpayer Identification Number (TIN) -> HARD hold, unconditional (mandatory for any government-facing contract)"
     (let [[db actor] (fresh)
           _ (assess! actor "t7pre" "eng-5")
           _ (draft! actor "t7pre" "eng-5")
@@ -100,16 +100,40 @@
       (is (some #{:tin-unverified} (-> (store/ledger db) last :basis)))
       (is (empty? (store/submit-history db))))))
 
-(deftest exactly-seven-days-registration-is-sufficient-then-escalates-normally
-  (testing "eng-6 is registered EXACTLY seven days before submission -- sufficient, so the only gate left is the normal actuation escalation, not a HARD hold"
+(deftest local-content-noncompliant-is-held-for-petroleum-sector
+  (testing "petroleum-sector engagement not Local Content Act compliant -> HARD hold"
     (let [[db actor] (fresh)
-          _ (assess! actor "t7b-pre" "eng-6")
-          _ (draft! actor "t7b-pre" "eng-6")
-          r1 (exec-op actor "t7b" {:op :filing/submit :subject "eng-6"} operator)]
-      (is (= :interrupted (:status r1)) "governor-clean -- pauses only for the actuation approval gate")
-      (let [r2 (approve! actor "t7b")]
+          _ (assess! actor "t7bpre" "eng-6")
+          _ (draft! actor "t7bpre" "eng-6")
+          res (exec-op actor "t7b" {:op :filing/submit :subject "eng-6"} operator)]
+      (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt")
+      (is (not= :interrupted (:status res)))
+      (is (some #{:local-content-noncompliant} (-> (store/ledger db) last :basis)))
+      (is (empty? (store/submit-history db))))))
+
+(deftest local-content-noncompliant-never-fires-outside-petroleum-sector
+  (testing "eng-7 carries the SAME 'noncompliant' flag as eng-6, but is a general-sector engagement -- the Local Content Act 2021 must NEVER fire here"
+    (let [[db actor] (fresh)
+          _ (assess! actor "t7cpre" "eng-7")
+          _ (draft! actor "t7cpre" "eng-7")
+          r1 (exec-op actor "t7c" {:op :filing/submit :subject "eng-7"} operator)]
+      (is (= :interrupted (:status r1)) "governor-clean of Local Content Act -- only the normal actuation escalation")
+      (let [r2 (approve! actor "t7c")]
         (is (= :commit (get-in r2 [:state :disposition])))
-        (is (true? (:submitted? (store/engagement db "eng-6"))))))))
+        (is (true? (:submitted? (store/engagement db "eng-7"))))
+        (is (not (some #{:local-content-noncompliant} (-> (store/ledger db) last :basis))))))))
+
+(deftest business-registration-missing-never-fires-when-no-undertaking-trigger-tripped
+  (testing "eng-8 is non-resident and unregistered, like eng-4, but trips NO Companies Act 1991 trigger -- must NOT hold"
+    (let [[db actor] (fresh)
+          _ (assess! actor "t7dpre" "eng-8")
+          _ (draft! actor "t7dpre" "eng-8")
+          r1 (exec-op actor "t7d" {:op :filing/submit :subject "eng-8"} operator)]
+      (is (= :interrupted (:status r1)) "governor-clean of business-registration -- only the normal actuation escalation")
+      (let [r2 (approve! actor "t7d")]
+        (is (= :commit (get-in r2 [:state :disposition])))
+        (is (true? (:submitted? (store/engagement db "eng-8"))))
+        (is (not (some #{:business-registration-missing} (-> (store/ledger db) last :basis))))))))
 
 (deftest submit-always-escalates-then-human-decides
   (testing "a clean fully-assessed submit still ALWAYS interrupts for human approval"
@@ -166,3 +190,13 @@
       (exec-op actor "b" {:op :jurisdiction/assess :subject "eng-1" :no-spec? true} operator)
       (is (= 2 (count (store/ledger db)))
           "one commit + one hold, both recorded"))))
+
+(deftest filing-draft-and-submit-never-auto-commit
+  (testing "even at phase 3 (supervised-auto), :filing/draft and :filing/submit always land in :request-approval, never straight to :commit"
+    (let [[_db actor] (fresh)
+          _ (assess! actor "t12pre" "eng-1")
+          r-draft (exec-op actor "t12draft" {:op :filing/draft :subject "eng-1"} operator)]
+      (is (= :interrupted (:status r-draft)) "filing/draft always pauses for approval, never auto-commits")
+      (let [_ (approve! actor "t12draft")
+            r-submit (exec-op actor "t12submit" {:op :filing/submit :subject "eng-1"} operator)]
+        (is (= :interrupted (:status r-submit)) "filing/submit always pauses for approval, never auto-commits")))))

@@ -1,13 +1,13 @@
 (ns marketentry.governor
   "Market-Entry Compliance Governor -- the independent compliance layer
   that earns the MarketEntry-LLM the right to commit. The LLM has no
-  notion of Guyanese procurement law, whether a claimed engagement fee
-  actually equals base + months x rate, whether the engagement's own
-  declared bidder-registration date actually clears the Procurement
-  (Amendment) Act 2019 s.4A(2) seven-day MINIMUM lead time before its
-  own declared bid-submission date, whether a Taxpayer Identification
-  Number (TIN) has been verified for a filing that requires it, or when
-  a draft stops being a draft and becomes a real-world npta.gov.gy
+  notion of Guyanese procurement law, whether a non-resident operator
+  has actually tripped the Companies Act 1991 'carrying on an
+  undertaking' registration trigger, whether a claimed engagement fee
+  actually equals base + months x rate, whether a Taxpayer
+  Identification Number (TIN) has been verified, whether the Local
+  Content Act 2021 even applies to this engagement's sector, or when a
+  draft stops being a draft and becomes a real-world npta.gov.gy
   Register-of-Bidders submission, so this MUST be a separate system
   able to *reject* a proposal and fall back to HOLD.
 
@@ -20,59 +20,70 @@
   human sign-off'; 'a false or fabricated regulatory-requirement claim
   is a HARD hold') names exactly the checks below.
 
-  Six checks, in priority order, ALL HARD violations: a human
-  approver CANNOT override them. The confidence/actuation gate is
-  SOFT: it asks a human to look (low confidence / actuation), and the
-  human may approve -- but see `marketentry.phase`: for `:stake
-  :actuation/draft-filing`/`:actuation/submit-filing` NO phase ever
-  allows auto-commit either. Two independent layers agree that
-  actuation is always a human call.
+  Six checks (items 1-6 below), in priority order, ALL HARD
+  violations: a human approver CANNOT override them. Item 7
+  (confidence/actuation gate) is SOFT: it asks a human to look (low
+  confidence / actuation), and the human may approve -- but see
+  `marketentry.phase`: for `:stake :actuation/draft-filing`/
+  `:actuation/submit-filing` NO phase ever allows auto-commit either.
+  Two independent layers agree that actuation is always a human call.
+
+  Of the six HARD checks, THREE are this jurisdiction's own regulatory
+  content (this task's own 'Recommended check count: 5' review
+  covered: business-registration/DCRA -> item 3 below;
+  NPTA-procurement-registration + PPC-oversight awareness -> folded
+  into items 1-2's citation/checklist requirement, since Guyana's
+  verified facts give no additional independently-recomputable ground
+  truth beyond 'was the official spec-basis cited and is the
+  registration evidence on file'; GRA TIN -> item 5; Local Content Act
+  2021 sector-conditional -> item 6); spec-basis/evidence-incomplete
+  (items 1-2) and engagement-fee-mismatch (item 4) are the same
+  universal structural guards every sibling actor in this fleet
+  carries, not jurisdiction-specific regulatory content.
 
     1. Spec-basis                  -- did the jurisdiction proposal cite
                                        an OFFICIAL source
                                        (`marketentry.facts`), or invent
-                                       one?
+                                       one? Also carries this
+                                       vertical's DCRA (business
+                                       registration)/NPTA (procurement
+                                       registration)/GRA (tax)/PPC
+                                       (procurement oversight, Article
+                                       212W) citation requirement --
+                                       see `evidence-incomplete` below.
     2. Evidence incomplete         -- for `:filing/draft`/
                                        `:filing/submit`, has the
                                        jurisdiction actually been
                                        assessed with a full evidence
-                                       checklist on file?
-    3. Registration lead time
-       insufficient                  -- for `:filing/submit`,
+                                       checklist on file (business
+                                       registration record, GRA TIN
+                                       record, NPTA Register of Bidders
+                                       application record,
+                                       authorized-representative
+                                       record)?
+    3. Business registration
+       missing                       -- for `:filing/submit`,
                                        INDEPENDENTLY recompute whether
-                                       the engagement's own declared
-                                       `:bidder-registration-date` was
-                                       AT LEAST SEVEN DAYS before its
-                                       own declared `:submission-date`,
-                                       per the Procurement (Amendment)
-                                       Act 2019 s.4A(2), doubly
-                                       corroborated by the Procurement
-                                       (Register of Bidders) Regulations
-                                       2022 reg.5(2), and HARD-hold if
-                                       not. Evaluated for EVERY
-                                       `:filing/submit`, unconditionally
-                                       (not gated behind a `:requires-X?`
-                                       flag), because reg.5(2) phrases
-                                       the seven-day rule as a mandatory
-                                       obligation on ALL suppliers and
-                                       contractors, not a conditional
-                                       one. FLAGSHIP genuinely new check
-                                       for the iso3166 family
-                                       (GitHub-code-search-verified
-                                       absent fleet-wide at build time,
-                                       see `marketentry.registry`) -- a
-                                       MINIMUM lead-time (cooldown) date
-                                       recompute, the temporal MIRROR
-                                       IMAGE of Barbados's own MAXIMUM
-                                       validity-window expiry check (BRB:
-                                       registration must not be too OLD;
-                                       GUY: registration must not be too
-                                       RECENT) -- a genuinely different
-                                       check OBJECT even though both
-                                       share the general 'date
-                                       arithmetic against a declared
-                                       registration date' MECHANIC -- see
-                                       `marketentry.registry`.
+                                       the engagement is required to be
+                                       registered with the Registrar of
+                                       Companies via DCRA (always true
+                                       for a resident Guyanese entity;
+                                       CONDITIONAL for a non-resident
+                                       entity on the Companies Act 1991
+                                       'carrying on an undertaking'
+                                       trigger set) and, if so, whether
+                                       `:business-registration-
+                                       verified?` is true. FLAGSHIP
+                                       check for this jurisdiction --
+                                       grounded in the Deeds and
+                                       Commercial Registries Authority
+                                       Act No. 4 of 2013 (DCRA) plus the
+                                       Companies Act 1991 non-resident
+                                       trigger set (see
+                                       `marketentry.registry`), never
+                                       fires for a non-resident
+                                       engagement that trips no
+                                       trigger.
     4. Engagement fee mismatch     -- for `:filing/submit`,
                                        INDEPENDENTLY recompute whether
                                        the engagement's own `:claimed-
@@ -81,19 +92,37 @@
                                        months` -- honest reapplication
                                        of the ground-truth-recompute
                                        discipline sibling actors use.
-    5. TIN unverified               -- for `:filing/submit`, when the
-                                       engagement declares
-                                       `:requires-tin? true`,
+    5. TIN unverified               -- for `:filing/submit`,
                                        INDEPENDENTLY check
-                                       `:tin-verified?` -- CONDITIONAL on
-                                       the engagement's own ground truth.
-                                       Grounded in the Guyana Revenue
-                                       Authority (GRA)'s own published
-                                       TIN application process, confirmed
-                                       as a SEPARATE act from Registrar-
-                                       of-Companies business registration
-                                       (two-act model, like ATG/GRD/BRB).
-    6. Confidence floor / actuation
+                                       `:tin-verified?`, UNCONDITIONALLY
+                                       (not gated behind a
+                                       `:requires-tin?` flag): every
+                                       engagement this actor exists for
+                                       is, by definition, conducting
+                                       business with a Government
+                                       Department/Public Authority/
+                                       Public Corporation, and the
+                                       Guyana Revenue Authority (GRA)'s
+                                       own published guidance makes a
+                                       TIN mandatory for exactly that.
+    6. Local Content Act
+       noncompliant                  -- for `:filing/submit`,
+                                       SECTOR-CONDITIONAL: fires ONLY
+                                       when the engagement's own
+                                       `:sector` is `:petroleum` (Local
+                                       Content Act 2021 applies only to
+                                       persons engaged in petroleum
+                                       operations/related activities
+                                       under a Petroleum Activities Act
+                                       license) AND
+                                       `:local-content-compliant?` is
+                                       not true. NEVER fires for any
+                                       other sector -- the sector
+                                       conditionality itself is the
+                                       fact under test (see
+                                       `marketentry.registry/local-
+                                       content-act-applies?`).
+    7. Confidence floor / actuation
        gate                          -- LLM confidence below threshold,
                                        OR the op is `:filing/draft`/
                                        `:filing/submit` (REAL acts)
@@ -140,26 +169,22 @@
                      (facts/required-evidence-satisfied?
                       (:jurisdiction e) (:checklist assessment)))
         [{:rule :evidence-incomplete
-          :detail "法域の必要書類(Registrar of Companies登録/GRA TIN登録/Register of Bidders登録/代理人確認等)が充足していない状態での提案"}]))))
+          :detail "法域の必要書類(DCRA事業者登録/GRA TIN登録/NPTA Register of Bidders登録/代理人確認等)が充足していない状態での提案"}]))))
 
-(defn- registration-lead-time-insufficient-violations
-  "For `:filing/submit`, INDEPENDENTLY recompute whether the
-  engagement's own declared `:bidder-registration-date` was AT LEAST
-  SEVEN DAYS before its own declared `:submission-date` -- the flagship
-  check this vertical adds. This is evaluated for EVERY `:filing/
-  submit`, unconditionally, because Procurement (Register of Bidders)
-  Regulations 2022 reg.5(2) phrases the seven-day rule as a mandatory
-  obligation on ALL suppliers and contractors."
+(defn- business-registration-missing-violations
+  "For `:filing/submit`, INDEPENDENTLY recompute whether the engagement
+  is required to be registered with the Registrar of Companies (via
+  DCRA) -- unconditional for a resident entity, CONDITIONAL on the
+  Companies Act 1991 'carrying on an undertaking' trigger set for a
+  non-resident entity -- and, if so, whether it actually has been.
+  FLAGSHIP check for this vertical."
   [{:keys [op subject]} st]
   (when (= op :filing/submit)
     (let [e (store/engagement st subject)]
-      (when (registry/bidder-registration-lead-time-insufficient? e)
-        [{:rule :registration-lead-time-insufficient
-          :detail (str subject " のRegister of Bidders登録日(" (:bidder-registration-date e)
-                      ")は提出日(" (:submission-date e)
-                      ")との間に法定の7日間のリードタイム(Procurement (Amendment) Act 2019 s.4A(2) / "
-                      "Procurement (Register of Bidders) Regulations 2022 reg.5(2))を確保できていない -- "
-                      "提出提案は進められない")}]))))
+      (when (registry/business-registration-missing? e)
+        [{:rule :business-registration-missing
+          :detail (str subject " は Deeds and Commercial Registries Authority (DCRA) への"
+                      "事業者登録(Companies Act 1991)が未確認 -- 提出提案は進められない")}]))))
 
 (defn- engagement-fee-mismatch-violations
   "For `:filing/submit`, INDEPENDENTLY recompute whether the
@@ -173,19 +198,34 @@
                       ")が独立再計算値(" (registry/compute-engagement-fee e) ")と一致しない")}]))))
 
 (defn- tin-unverified-violations
-  "For `:filing/submit`, when the engagement declares `:requires-tin?
-  true`, INDEPENDENTLY check `:tin-verified?` -- CONDITIONAL on the
-  engagement's own ground truth. Grounded in the Guyana Revenue
-  Authority (GRA)'s own published Taxpayer Identification Number (TIN)
-  application process, confirmed as a SEPARATE act from Registrar-of-
-  Companies business registration."
+  "For `:filing/submit`, INDEPENDENTLY check `:tin-verified?`,
+  UNCONDITIONALLY -- every engagement this actor handles is by
+  definition conducting business with a Government Department/Public
+  Authority/Public Corporation, and GRA's own published guidance makes
+  a TIN mandatory for exactly that (never gated behind a
+  `:requires-tin?` flag)."
   [{:keys [op subject]} st]
   (when (= op :filing/submit)
     (let [e (store/engagement st subject)]
-      (when (and (true? (:requires-tin? e))
-                 (not (true? (:tin-verified? e))))
+      (when-not (true? (:tin-verified? e))
         [{:rule :tin-unverified
-          :detail (str subject " はGRA(Guyana Revenue Authority)TIN確認を要するが未確認 -- 提出提案は進められない")}]))))
+          :detail (str subject " は Guyana Revenue Authority (GRA) の"
+                      "Taxpayer Identification Number (TIN) 確認が未完了 -- "
+                      "提出提案は進められない")}]))))
+
+(defn- local-content-noncompliant-violations
+  "For `:filing/submit`, SECTOR-CONDITIONAL: only evaluates the Local
+  Content Act 2021 when the engagement's own `:sector` is `:petroleum`
+  -- never for any other sector."
+  [{:keys [op subject]} st]
+  (when (= op :filing/submit)
+    (let [e (store/engagement st subject)]
+      (when (registry/local-content-noncompliant? e)
+        [{:rule :local-content-noncompliant
+          :detail (str subject " は石油部門(petroleum operations)の案件であり、"
+                      "Local Content Act 2021 の要件(Guyana国籍株主51%以上/"
+                      "上級管理職75%以上/非管理職90%以上等、石油部門限定)への"
+                      "適合が未確認 -- 提出提案は進められない")}]))))
 
 (defn- already-drafted-violations
   "For `:filing/draft`, refuses to draft the SAME engagement twice."
@@ -211,9 +251,10 @@
   (let [hard (into []
                    (concat (spec-basis-violations request proposal)
                            (evidence-incomplete-violations request st)
-                           (registration-lead-time-insufficient-violations request st)
+                           (business-registration-missing-violations request st)
                            (engagement-fee-mismatch-violations request st)
                            (tin-unverified-violations request st)
+                           (local-content-noncompliant-violations request st)
                            (already-drafted-violations request st)
                            (already-submitted-violations request st)))
         conf (:confidence proposal 0.0)

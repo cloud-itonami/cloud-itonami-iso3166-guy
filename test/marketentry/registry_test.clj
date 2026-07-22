@@ -21,42 +21,54 @@
   (is (thrown? Exception (registry/register-draft "" "GUY" 0)))
   (is (thrown? Exception (registry/register-submit "eng-1" "" 0))))
 
-(deftest days-from-civil-matches-known-day-counts
-  (testing "Howard Hinnant's days_from_civil, cross-checked against Python's datetime while writing this namespace"
-    (is (= 0     (registry/days-from-civil 1970 1 1)))
-    (is (= 18993 (registry/days-from-civil 2022 1 1)))
-    (is (= 11016 (registry/days-from-civil 2000 2 29)))   ; leap day
-    (is (= 19782 (registry/days-from-civil 2024 2 29)))   ; leap day
-    (is (= 18059 (registry/days-from-civil 2019 6 12)))
-    (is (= 18992 (registry/days-from-civil 2021 12 31)))
-    (is (= 20655 (registry/days-from-civil 2026 7 21)))))
+;; --------------- Companies Act 1991 non-resident registration gate ---------------
 
-(deftest parse-iso-date-round-trips-days-from-civil
-  (is (= (registry/days-from-civil 2026 7 21) (registry/parse-iso-date "2026-07-21")))
-  (is (= (registry/days-from-civil 2026 6 1)  (registry/parse-iso-date "2026-06-01")))
-  (is (nil? (registry/parse-iso-date nil)))
-  (is (nil? (registry/parse-iso-date ""))))
+(deftest resident-entity-always-requires-registration
+  (testing "a RESIDENT Guyanese entity must always be registered -- no trigger conditionality"
+    (is (true? (registry/business-registration-missing?
+                {:resident? true :business-registration-verified? false})))
+    (is (false? (registry/business-registration-missing?
+                 {:resident? true :business-registration-verified? true})))))
 
-(deftest earliest-eligible-bid-day-is-registration-plus-seven-days
-  (is (= (registry/parse-iso-date "2026-06-08") (registry/earliest-eligible-bid-day "2026-06-01")))
-  ;; month boundary: 2026-07-28 + 7 days = 2026-08-04
-  (is (= (registry/parse-iso-date "2026-08-04") (registry/earliest-eligible-bid-day "2026-07-28")))
-  (is (nil? (registry/earliest-eligible-bid-day nil))))
+(deftest non-resident-entity-is-conditional-on-triggers
+  (testing "a NON-RESIDENT entity that trips a Companies Act 1991 trigger must be registered"
+    (is (true? (registry/non-resident-registration-required?
+                {:resident? false :undertaking-triggers #{:two-or-more-local-contracts?}})))
+    (is (true? (registry/business-registration-missing?
+                {:resident? false :undertaking-triggers #{:two-or-more-local-contracts?}
+                 :business-registration-verified? false}))))
+  (testing "a NON-RESIDENT entity that trips NO trigger is NOT yet required to register"
+    (is (false? (registry/non-resident-registration-required?
+                 {:resident? false :undertaking-triggers #{}})))
+    (is (false? (registry/business-registration-missing?
+                 {:resident? false :undertaking-triggers #{}
+                  :business-registration-verified? false})))
+    (is (false? (registry/business-registration-missing?
+                 {:resident? false :undertaking-triggers nil
+                  :business-registration-verified? false}))))
+  (testing "a NON-RESIDENT entity that trips a trigger AND is verified is fine"
+    (is (false? (registry/business-registration-missing?
+                 {:resident? false :undertaking-triggers #{:appointed-resident-agent?}
+                  :business-registration-verified? true})))))
 
-(deftest bidder-registration-lead-time-insufficient-recompute
-  (testing "seven clear days between registration and submission -> sufficient (not insufficient)"
-    (is (false? (registry/bidder-registration-lead-time-insufficient?
-                 {:bidder-registration-date "2026-06-01" :submission-date "2026-07-21"}))))
-  (testing "only three days between registration and submission -> insufficient"
-    (is (true? (registry/bidder-registration-lead-time-insufficient?
-                {:bidder-registration-date "2026-07-18" :submission-date "2026-07-21"}))))
-  (testing "EXACTLY seven days -> sufficient (not STRICTLY before the earliest eligible day)"
-    (is (false? (registry/bidder-registration-lead-time-insufficient?
-                 {:bidder-registration-date "2026-07-14" :submission-date "2026-07-21"}))))
-  (testing "six days (one short) -> insufficient"
-    (is (true? (registry/bidder-registration-lead-time-insufficient?
-                {:bidder-registration-date "2026-07-15" :submission-date "2026-07-21"}))))
-  (testing "missing either date -> never treated as insufficient here (evidence-incomplete's job)"
-    (is (false? (registry/bidder-registration-lead-time-insufficient? {:submission-date "2026-07-21"})))
-    (is (false? (registry/bidder-registration-lead-time-insufficient? {:bidder-registration-date "2026-06-01"})))
-    (is (false? (registry/bidder-registration-lead-time-insufficient? {})))))
+;; --------------- Local Content Act 2021 (sector-gated) ---------------
+
+(deftest local-content-act-applies-only-to-petroleum-sector
+  (testing "the Local Content Act 2021 applies ONLY to petroleum-sector engagements"
+    (is (true? (registry/local-content-act-applies? {:sector :petroleum})))
+    (is (false? (registry/local-content-act-applies? {:sector :general})))
+    (is (false? (registry/local-content-act-applies? {:sector :construction})))
+    (is (false? (registry/local-content-act-applies? {})))))
+
+(deftest local-content-noncompliant-is-sector-conditional
+  (testing "petroleum sector, not compliant -> noncompliant"
+    (is (true? (registry/local-content-noncompliant?
+                {:sector :petroleum :local-content-compliant? false}))))
+  (testing "petroleum sector, compliant -> not noncompliant"
+    (is (false? (registry/local-content-noncompliant?
+                 {:sector :petroleum :local-content-compliant? true}))))
+  (testing "NON-petroleum sector NEVER fires this check, even with the same 'noncompliant' flag"
+    (is (false? (registry/local-content-noncompliant?
+                 {:sector :general :local-content-compliant? false}))))
+  (testing "missing sector NEVER fires this check"
+    (is (false? (registry/local-content-noncompliant? {:local-content-compliant? false})))))

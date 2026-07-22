@@ -9,8 +9,11 @@
                            :value {:id "eng-x" :operator "X Ltd" :jurisdiction "GUY"
                                    :base-fee 100 :monthly-rate 10 :monitoring-months 1
                                    :claimed-fee 110.0
-                                   :bidder-registration-date "2026-06-01" :submission-date "2026-07-21"
-                                   :requires-tin? true :tin-verified? true
+                                   :resident? false
+                                   :undertaking-triggers #{:two-or-more-local-contracts?}
+                                   :business-registration-verified? true
+                                   :tin-verified? true
+                                   :sector :petroleum :local-content-compliant? true
                                    :drafted? false :submitted? false :status :intake}})
   (store/commit-record! s {:effect :assessment/set
                            :path ["eng-x"]
@@ -37,11 +40,24 @@
         m (exercise mem*)
         d (exercise dat*)]
     (is (= (:operator (:engagement m)) (:operator (:engagement d))))
-    (is (= (:bidder-registration-date (:engagement m)) (:bidder-registration-date (:engagement d))))
-    (is (= (:submission-date (:engagement m)) (:submission-date (:engagement d))))
+    (is (= (:resident? (:engagement m)) (:resident? (:engagement d))))
+    (is (= (:undertaking-triggers (:engagement m)) (:undertaking-triggers (:engagement d))))
+    (is (= (:business-registration-verified? (:engagement m)) (:business-registration-verified? (:engagement d))))
+    (is (= (:sector (:engagement m)) (:sector (:engagement d))))
     (is (true? (:drafted? m)) (true? (:drafted? d)))
     (is (true? (:submitted? m)) (true? (:submitted? d)))
     (is (= 1 (count (:drafts m))) (= 1 (count (:drafts d))))
     (is (= 1 (count (:submits m))) (= 1 (count (:submits d))))
     (is (= 1 (count (:ledger m))) (= 1 (count (:ledger d))))
-    (is (= (:assessment m) (:assessment d)))))
+    (is (= (:assessment m) (:assessment d)))
+    (testing "the SAME demo data feeds MemStore and DatomicStore seeding without error"
+      (is (= (count (store/all-engagements mem))
+             (count (store/all-engagements dat)))))))
+
+(deftest business-registration-missing-parity-check-across-demo-data
+  (testing "the demo data itself is consistent with marketentry.registry's own predicates (sanity check, not just store plumbing)"
+    (let [db (store/seed-db)
+          e4 (store/engagement db "eng-4")
+          e8 (store/engagement db "eng-8")]
+      (is (true? (registry/business-registration-missing? e4)))
+      (is (false? (registry/business-registration-missing? e8))))))

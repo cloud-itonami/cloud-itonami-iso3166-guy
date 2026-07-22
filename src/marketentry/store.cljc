@@ -6,7 +6,11 @@
     - `MemStore`     -- atom of EDN. The deterministic default for
                         dev/tests/demo (no deps).
     - `DatomicStore` -- backed by `langchain.db`, a Datomic-API-compatible
-                        EAV store.
+                        EAV store. Uses `langchain-store.core`
+                        (`ls/enc`/`ls/dec*`/`ls/read-stream`/
+                        `ls/append-blob!`) for the EDN-blob codec and
+                        event-log read/append instead of a hand-rolled
+                        two-liner (ADR-2607141600).
 
   Both implement the same protocol and pass the same contract
   (test/marketentry/store_contract_test.clj).
@@ -18,10 +22,9 @@
   `:status` value).
 
   The ledger stays append-only on every backend."
-  (:require #?(:clj  [clojure.edn :as edn]
-               :cljs [cljs.reader :as edn])
-            [marketentry.registry :as registry]
-            [langchain.db :as d]))
+  (:require [marketentry.registry :as registry]
+            [langchain.db :as d]
+            [langchain-store.core :as ls]))
 
 (defprotocol Store
   (engagement [s id])
@@ -42,55 +45,94 @@
 
 (defn demo-data
   "A small, self-contained engagement set covering both actuation
-  lifecycles (draft, submit) plus the governor's own new checks.
-  `:bidder-registration-date` / `:submission-date` are ground truth for
-  the flagship MINIMUM-lead-time recompute (Procurement (Amendment) Act
-  2019 s.4A(2) + Procurement (Register of Bidders) Regulations 2022
-  reg.5(2), seven-day Register of Bidders lead time); `:requires-tin?`
-  / `:tin-verified?` are ground truth for the conditional GRA TIN
-  check."
+  lifecycles (draft, submit) plus the governor's own checks.
+
+    - eng-1 clean, resident, registered, TIN-verified, general sector
+      (Local Content Act does NOT apply) -- the walkthrough-happy-path
+      engagement.
+    - eng-2 no spec-basis jurisdiction (\"ATL\").
+    - eng-3 engagement-fee-mismatch.
+    - eng-4 NON-RESIDENT, trips a Companies Act 1991 'carrying on an
+      undertaking' trigger, but `:business-registration-verified?` is
+      false -- `business-registration-missing` HARD hold.
+    - eng-5 TIN unverified -- `tin-unverified` HARD hold.
+    - eng-6 petroleum-sector, `:local-content-compliant?` false --
+      `local-content-noncompliant` HARD hold.
+    - eng-7 NON-petroleum sector (general), `:local-content-compliant?`
+      false -- proves the SECTOR conditionality: this must NOT hold on
+      `local-content-noncompliant` even though the same 'noncompliant'
+      flag is set, because the Local Content Act 2021 never applies
+      outside petroleum.
+    - eng-8 NON-RESIDENT, trips NO Companies Act 1991 trigger, and
+      `:business-registration-verified?` is false -- proves the
+      non-resident trigger conditionality: this must NOT hold on
+      `business-registration-missing`, because the Act does not yet
+      require this entity to register."
   []
   {:engagements
    {"eng-1" {:id "eng-1" :operator "Demerara Trading Co. Ltd" :portal "www.npta.gov.gy"
              :base-fee 500000 :monthly-rate 30000 :monitoring-months 12
              :claimed-fee 860000.0
-             :bidder-registration-date "2026-06-01" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? true
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? true
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "GUY" :status :intake}
     "eng-2" {:id "eng-2" :operator "Atlantis LLC" :portal "www.npta.gov.gy"
              :base-fee 500000 :monthly-rate 30000 :monitoring-months 12
              :claimed-fee 860000.0
-             :bidder-registration-date "2026-06-01" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? true
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? true
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "ATL" :status :intake}
     "eng-3" {:id "eng-3" :operator "Stabroek Builders Ltd" :portal "www.npta.gov.gy"
              :base-fee 500000 :monthly-rate 30000 :monitoring-months 12
              :claimed-fee 999000.0
-             :bidder-registration-date "2026-06-01" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? true
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? true
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "GUY" :status :intake}
     "eng-4" {:id "eng-4" :operator "Linden Freight Services Ltd" :portal "www.npta.gov.gy"
              :base-fee 500000 :monthly-rate 30000 :monitoring-months 12
              :claimed-fee 860000.0
-             :bidder-registration-date "2026-07-18" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? true
+             :resident? false :undertaking-triggers #{:two-or-more-local-contracts?}
+             :business-registration-verified? false
+             :tin-verified? true
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "GUY" :status :intake}
     "eng-5" {:id "eng-5" :operator "Berbice River Supplies Ltd" :portal "www.npta.gov.gy"
              :base-fee 500000 :monthly-rate 30000 :monitoring-months 12
              :claimed-fee 860000.0
-             :bidder-registration-date "2026-06-01" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? false
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? false
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "GUY" :status :intake}
-    "eng-6" {:id "eng-6" :operator "Essequibo Coast Agro-Supplies Ltd" :portal "www.npta.gov.gy"
+    "eng-6" {:id "eng-6" :operator "Essequibo Offshore Services Ltd" :portal "www.npta.gov.gy"
              :base-fee 300000 :monthly-rate 20000 :monitoring-months 6
              :claimed-fee 420000.0
-             :bidder-registration-date "2026-07-14" :submission-date "2026-07-21"
-             :requires-tin? true :tin-verified? true
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? true
+             :sector :petroleum :local-content-compliant? false
+             :drafted? false :submitted? false
+             :jurisdiction "GUY" :status :intake}
+    "eng-7" {:id "eng-7" :operator "Georgetown Office Supplies Ltd" :portal "www.npta.gov.gy"
+             :base-fee 300000 :monthly-rate 20000 :monitoring-months 6
+             :claimed-fee 420000.0
+             :resident? true :undertaking-triggers #{} :business-registration-verified? true
+             :tin-verified? true
+             :sector :general :local-content-compliant? false
+             :drafted? false :submitted? false
+             :jurisdiction "GUY" :status :intake}
+    "eng-8" {:id "eng-8" :operator "Overseas Consulting Partners LLC" :portal "www.npta.gov.gy"
+             :base-fee 300000 :monthly-rate 20000 :monitoring-months 6
+             :claimed-fee 420000.0
+             :resident? false :undertaking-triggers #{} :business-registration-verified? false
+             :tin-verified? true
+             :sector :general :local-content-compliant? nil
              :drafted? false :submitted? false
              :jurisdiction "GUY" :status :intake}}})
 
@@ -181,12 +223,10 @@
    :draft-sequence/jurisdiction     {:db/unique :db.unique/identity}
    :submit-sequence/jurisdiction    {:db/unique :db.unique/identity}})
 
-(defn- enc [v] (pr-str v))
-(defn- dec* [s] (when s (edn/read-string s)))
-
 (defn- engagement->tx [{:keys [id operator portal base-fee monthly-rate monitoring-months claimed-fee
-                               bidder-registration-date submission-date
-                               requires-tin? tin-verified?
+                               resident? undertaking-triggers business-registration-verified?
+                               tin-verified?
+                               sector local-content-compliant?
                                drafted? submitted?
                                jurisdiction status draft-number submit-number]}]
   (cond-> {:engagement/id id}
@@ -196,10 +236,12 @@
     monthly-rate                          (assoc :engagement/monthly-rate monthly-rate)
     monitoring-months                     (assoc :engagement/monitoring-months monitoring-months)
     claimed-fee                           (assoc :engagement/claimed-fee claimed-fee)
-    bidder-registration-date              (assoc :engagement/bidder-registration-date bidder-registration-date)
-    submission-date                       (assoc :engagement/submission-date submission-date)
-    (some? requires-tin?)                 (assoc :engagement/requires-tin? requires-tin?)
+    (some? resident?)                     (assoc :engagement/resident? resident?)
+    undertaking-triggers                  (assoc :engagement/undertaking-triggers (ls/enc undertaking-triggers))
+    (some? business-registration-verified?) (assoc :engagement/business-registration-verified? business-registration-verified?)
     (some? tin-verified?)                 (assoc :engagement/tin-verified? tin-verified?)
+    sector                                (assoc :engagement/sector sector)
+    (some? local-content-compliant?)      (assoc :engagement/local-content-compliant? local-content-compliant?)
     (some? drafted?)                      (assoc :engagement/drafted? drafted?)
     (some? submitted?)                    (assoc :engagement/submitted? submitted?)
     jurisdiction                          (assoc :engagement/jurisdiction jurisdiction)
@@ -210,8 +252,9 @@
 (def ^:private engagement-pull
   [:engagement/id :engagement/operator :engagement/portal :engagement/base-fee :engagement/monthly-rate
    :engagement/monitoring-months :engagement/claimed-fee
-   :engagement/bidder-registration-date :engagement/submission-date
-   :engagement/requires-tin? :engagement/tin-verified?
+   :engagement/resident? :engagement/undertaking-triggers :engagement/business-registration-verified?
+   :engagement/tin-verified?
+   :engagement/sector :engagement/local-content-compliant?
    :engagement/drafted? :engagement/submitted?
    :engagement/jurisdiction :engagement/status :engagement/draft-number :engagement/submit-number])
 
@@ -220,10 +263,12 @@
     {:id (:engagement/id m) :operator (:engagement/operator m) :portal (:engagement/portal m)
      :base-fee (:engagement/base-fee m) :monthly-rate (:engagement/monthly-rate m)
      :monitoring-months (:engagement/monitoring-months m) :claimed-fee (:engagement/claimed-fee m)
-     :bidder-registration-date (:engagement/bidder-registration-date m)
-     :submission-date (:engagement/submission-date m)
-     :requires-tin? (boolean (:engagement/requires-tin? m))
+     :resident? (boolean (:engagement/resident? m))
+     :undertaking-triggers (or (ls/dec* (:engagement/undertaking-triggers m)) #{})
+     :business-registration-verified? (boolean (:engagement/business-registration-verified? m))
      :tin-verified? (boolean (:engagement/tin-verified? m))
+     :sector (:engagement/sector m)
+     :local-content-compliant? (:engagement/local-content-compliant? m)
      :drafted? (boolean (:engagement/drafted? m)) :submitted? (boolean (:engagement/submitted? m))
      :jurisdiction (:engagement/jurisdiction m) :status (:engagement/status m)
      :draft-number (:engagement/draft-number m) :submit-number (:engagement/submit-number m)}))
@@ -237,21 +282,12 @@
          (map #(pull->engagement (d/pull (d/db conn) engagement-pull [:engagement/id %])))
          (sort-by :id)))
   (assessment-of [_ engagement-id]
-    (dec* (d/q '[:find ?p . :in $ ?eid
-                :where [?a :assessment/engagement-id ?eid] [?a :assessment/payload ?p]]
-              (d/db conn) engagement-id)))
-  (ledger [_]
-    (->> (d/q '[:find ?s ?f :where [?e :ledger/seq ?s] [?e :ledger/fact ?f]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
-  (draft-history [_]
-    (->> (d/q '[:find ?s ?r :where [?e :draft-record/seq ?s] [?e :draft-record/record ?r]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
-  (submit-history [_]
-    (->> (d/q '[:find ?s ?r :where [?e :submit-record/seq ?s] [?e :submit-record/record ?r]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
+    (ls/dec* (d/q '[:find ?p . :in $ ?eid
+                   :where [?a :assessment/engagement-id ?eid] [?a :assessment/payload ?p]]
+                 (d/db conn) engagement-id)))
+  (ledger [_] (ls/read-stream conn :ledger/seq :ledger/fact))
+  (draft-history [_] (ls/read-stream conn :draft-record/seq :draft-record/record))
+  (submit-history [_] (ls/read-stream conn :submit-record/seq :submit-record/record))
   (next-draft-sequence [_ jurisdiction]
     (or (d/q '[:find ?n . :in $ ?j
               :where [?e :draft-sequence/jurisdiction ?j] [?e :draft-sequence/next ?n]]
@@ -272,7 +308,7 @@
       (d/transact! conn [(engagement->tx value)])
 
       :assessment/set
-      (d/transact! conn [{:assessment/engagement-id (first path) :assessment/payload (enc payload)}])
+      (d/transact! conn [{:assessment/engagement-id (first path) :assessment/payload (ls/enc payload)}])
 
       :engagement/mark-drafted
       (let [engagement-id (first path)
@@ -282,7 +318,7 @@
         (d/transact! conn
                      [(engagement->tx (assoc engagement-patch :id engagement-id))
                       {:draft-sequence/jurisdiction jurisdiction :draft-sequence/next next-n}
-                      {:draft-record/seq (count (draft-history s)) :draft-record/record (enc (get result "record"))}])
+                      {:draft-record/seq (count (draft-history s)) :draft-record/record (ls/enc (get result "record"))}])
         result)
 
       :engagement/mark-submitted
@@ -293,12 +329,12 @@
         (d/transact! conn
                      [(engagement->tx (assoc engagement-patch :id engagement-id))
                       {:submit-sequence/jurisdiction jurisdiction :submit-sequence/next next-n}
-                      {:submit-record/seq (count (submit-history s)) :submit-record/record (enc (get result "record"))}])
+                      {:submit-record/seq (count (submit-history s)) :submit-record/record (ls/enc (get result "record"))}])
         result)
       nil)
     s)
   (append-ledger! [s fact]
-    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (enc fact)}])
+    (ls/append-blob! conn :ledger/seq :ledger/fact (count (ledger s)) fact)
     fact)
   (with-engagements [s engagements]
     (when (seq engagements) (d/transact! conn (mapv engagement->tx (vals engagements)))) s))
