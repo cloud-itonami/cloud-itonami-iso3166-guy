@@ -16,7 +16,7 @@ compliance department.
 
 ## Regulatory catalog (verified facts only)
 
-Every fact in `src/marketentry/facts.cljc` traces to one of the
+Every fact in `src/marketentry/facts.kotoba` traces to one of the
 official/primary sources below. See that namespace's docstring for the
 full source list and the "explicitly NOT claimed" fabrication traps
 this repository deliberately avoids (a previous draft of this
@@ -70,7 +70,7 @@ architecture.md` "Correction" section for what was found and fixed).
 | Ops | `:engagement/intake` · `:jurisdiction/assess` · `:filing/draft` · `:filing/submit` |
 | Flagship HARD check | `business-registration-missing` (DCRA/Companies Act 1991 registration, CONDITIONAL on the non-resident "carrying on an undertaking" trigger set for a non-resident operator, unconditional for a resident one -- see `docs/adr/0001-architecture.md`) |
 | Other checks | `evidence-incomplete` · `engagement-fee-mismatch` · `tin-unverified` (GRA TIN, unconditional) · `local-content-noncompliant` (Local Content Act 2021, SECTOR-CONDITIONAL, fires only for `:sector :petroleum`) |
-| Compliance catalog | `src/statute/facts.cljc` -- Companies Act (Cap. 89:01), Labour Act (Cap. 98:01), Termination of Employment and Severance Pay Act (Cap. 96:01), Local Content Act 2021 |
+| Compliance catalog | `src/statute/facts.kotoba` -- Companies Act (Cap. 89:01), Labour Act (Cap. 98:01), Termination of Employment and Severance Pay Act (Cap. 96:01), Local Content Act 2021 |
 | Tests | `clojure -M:dev:test` |
 | Demo | `clojure -M:dev:run` |
 | Architecture ADR | [`docs/adr/0001-architecture.md`](docs/adr/0001-architecture.md) |
@@ -104,7 +104,7 @@ Concretely, in `marketentry.operation/build`'s StateGraph,
 `:filing/submit` proposal reaches that node -- there is no code path
 that reaches `:commit` for either op without a human explicitly
 resuming the run with `{:approval {:status :approved :by "<human>"}}`.
-`test/marketentry/governor_contract_test.clj`'s
+`test/marketentry/governor_contract_test.kotoba`'s
 `filing-draft-and-submit-never-auto-commit` test asserts this
 end-to-end, at phase 3 (the most permissive phase).
 
@@ -177,7 +177,7 @@ Alongside the market-entry / statute catalogs, this repo carries a
 `com-junkawasaki/root`) — national dishes, protected products, beverages,
 crafts, festivals and heritage sites for Guyana:
 
-- `src/culture/facts.cljc` — the catalog, source of truth (keyed by
+- `src/culture/facts.kotoba` — the catalog, source of truth (keyed by
   uppercase ISO3, mirroring `statute.facts`).
 - `schema/culture.edn` — DataScript schema.
 - `data/culture-tx.edn` — derived DataScript tx-data (regenerated from

@@ -155,8 +155,8 @@ others").
 
 ### What was NOT touched
 
-- `src/culture/facts.cljc` (Wave 1, unrelated batch) is untouched.
-- `src/statute/facts.cljc` (the general-compliance catalog: Companies
+- `src/culture/facts.kotoba` (Wave 1, unrelated batch) is untouched.
+- `src/statute/facts.kotoba` (the general-compliance catalog: Companies
   Act, Labour Act, Termination of Employment and Severance Pay Act,
   Local Content Act 2021) is untouched -- its own citations (mola.gov.gy
   / parliament.gov.gy URLs) were not part of this task's verified-facts
