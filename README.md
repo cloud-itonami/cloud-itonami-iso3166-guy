@@ -71,8 +71,8 @@ architecture.md` "Correction" section for what was found and fixed).
 | Flagship HARD check | `business-registration-missing` (DCRA/Companies Act 1991 registration, CONDITIONAL on the non-resident "carrying on an undertaking" trigger set for a non-resident operator, unconditional for a resident one -- see `docs/adr/0001-architecture.md`) |
 | Other checks | `evidence-incomplete` · `engagement-fee-mismatch` · `tin-unverified` (GRA TIN, unconditional) · `local-content-noncompliant` (Local Content Act 2021, SECTOR-CONDITIONAL, fires only for `:sector :petroleum`) |
 | Compliance catalog | `src/statute/facts.kotoba` -- Companies Act (Cap. 89:01), Labour Act (Cap. 98:01), Termination of Employment and Severance Pay Act (Cap. 96:01), Local Content Act 2021 |
-| Tests | `clojure -M:dev:test` |
-| Demo | `clojure -M:dev:run` |
+| Tests | `kbb -M:dev:test` |
+| Demo | `kbb -M:dev:run` |
 | Architecture ADR | [`docs/adr/0001-architecture.md`](docs/adr/0001-architecture.md) |
 
 `:filing/submit` is never in any phase's `:auto` set -- human sign-off
